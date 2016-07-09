@@ -1,55 +1,3 @@
-// # BIBADS
-// This program generates a bib file to be used with bibtex. The name of the generated bib file is as needed by the tex file, for e.g. if the tex file contains `\bibliography{KN16.bib}` the
-// generated file name will be `KN16.bib`. Beware this will overrite any existing file with the same name and path.
-
-// The generated bib file will contain all the citations needed by the tex file that can be found in the Nasa Astrophysics Data System (Nasa ADS)
-
-// All citations in the tex file need to reference bibcodes, e.g. `\cite{2009MNRAS.399..683J}`
-
-// Aliases are optional, and are defined inside a comment in the tex file, for e.g.:
-// ```
-// % bibalias colles2DF 2001MNRAS.328.1039C
-// % bibalias peeb80    1980lssu.book.....P
-// ```
-// Then the citation can look like `\cite{peeb80, colles2DF}`
-
-// # RUN THE PROGRAM
-
-// One option is to run it as a script, this needs a go installation (google golang):
-// ```
-// > go run bibads.go [your tex file here]
-// ```
-
-// A second option is compiling, this need a go installation, it generates a self contained executable:
-// ```
-// > go build bibads.go
-// ```
-// You can also use a precompiled binary for your OS, there currently is one for OSX, Linux and Windows (all for amd64 arch). When you have a working binary just run:
-// ```
-// ./bibads [your tex file here]
-// ```
-
-// # MOTIVATION
-// 1. When using this program there is not need to maintain a separate bib file. The bib file is very personal, sometimes it is managed by "knowledge" systems, it is hard to share, merge, etc.
-// 2. Updating all bib entries is as easy as running a single command
-
-// # WHY GO?
-// 1. It is statically typed, which I like
-// 2. It compiles fast, I like this too
-// 3. Cross compile to Linux, OSX and Windows... I like!
-// 4. Compiles to self contained binaries, no need to install a thing in this mode
-// 5. Can run program as a script
-// 6. Efficient (fast, etc.)
-
-// # LICENSE
-// do whatever you want with this, use on your own risk
-
-// # AUTHOR
-// Ariel Keselman
-
-// # VERSION
-// 1.1.0 2016
-
 package main
 
 import (
@@ -59,8 +7,23 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 )
+
+func getCacheFromBibFile(fileName string) (cache map[string]string, err error) {
+	fileBytes, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		return nil, err
+	}
+	fileStr := string(fileBytes)
+	sep := strings.Split(fileStr, "@")
+	cache = make(map[string]string)
+	for _, entry := range sep[1:] {
+		entry = strings.TrimSpace(entry)
+		code := strings.Split(strings.Split(entry, "{")[1], ",")[0]
+		cache[code] = "@" + entry
+	}
+	return cache, nil
+}
 
 func getBibCodeAliasesFromSource(fileName string) (bibCodeAliases map[string]string, err error) {
 	fileBytes, err := ioutil.ReadFile(fileName)
@@ -154,15 +117,47 @@ func getBibRef(bibCode string) (bibRef string, err error) {
 	return bibRef, nil
 }
 
+func getAliasedCachedBibText(code string, bibCodeAliases map[string]string, cache map[string]string, out chan string) {
+	realCode, isAlias := bibCodeAliases[code]
+	var alias string
+	if isAlias {
+		alias = code
+		code = realCode
+	}
+
+	msg := padRight(code, " ", 19) + "   " + padRight(alias, " ", 15) + "   ...   "
+	isInCache := false
+	bibRefText := ""
+	var err error
+	if cache != nil {
+		if isAlias {
+			bibRefText, isInCache = cache[alias]
+		} else {
+			bibRefText, isInCache = cache[code]
+		}
+	}
+	if !isInCache {
+		bibRefText, err = getBibRef(code)
+		if err != nil {
+			println(msg, err.Error())
+			return
+		}
+		println(msg, "OK")
+	} else {
+		println(msg, "OK (cached)")
+	}
+	if isAlias {
+		bibRefText = strings.Replace(bibRefText, "{"+realCode, "{"+alias, 1)
+	}
+	out <- bibRefText
+}
+
 func main() {
+	noCachePtr := flag.Bool("nocache", false, "force fetch data from ads even if present in current bib file")
 	flag.Parse()
 
 	if flag.NArg() == 0 {
-		println("please supply name of file to operate on")
-		os.Exit(1)
-	}
-	if flag.NArg() > 1 {
-		println("please supply only a single name of file to oprate on (a single non flag argument)")
+		println("please supply name of file to operate on. Add a -nocache flag to not use existing entries")
 		os.Exit(1)
 	}
 
@@ -177,32 +172,21 @@ func main() {
 	}
 	println("bib file name: ", bibFileName)
 
+	var cache map[string]string
+	println("nocache=", *noCachePtr)
+	if !(*noCachePtr) {
+		cache, _ = getCacheFromBibFile(bibFileName)
+	}
+
 	bibFileText := ""
-	var wg sync.WaitGroup
-	addBibText := func(code string) {
-		defer wg.Done()
-		realCode, isAlias := bibCodeAliases[code]
-		var alias string
-		if isAlias {
-			alias = code
-			code = realCode
-		}
-		bibRefText, err := getBibRef(code)
-		if err != nil {
-			println(padRight(code, " ", 19), "   ", padRight(alias, " ", 15), "   ...   ", err.Error())
-			return
-		}
-		println(padRight(code, " ", 19), "   ", padRight(alias, " ", 15), "   ...   OK")
-		if isAlias {
-			bibRefText = strings.Replace(bibRefText, realCode, alias, 1)
-		}
-		bibFileText = bibFileText + "\n\n" + bibRefText
-	}
+	c := make(chan string)
 	for code := range codes {
-		wg.Add(1)
-		go addBibText(code)
+		go getAliasedCachedBibText(code, bibCodeAliases, cache, c)
 	}
-	wg.Wait()
+	for _ = range codes {
+		bibText := <-c
+		bibFileText += "\n\n" + bibText
+	}
 
 	ioutil.WriteFile(bibFileName, []byte(bibFileText), 0644)
 }
