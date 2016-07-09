@@ -33,6 +33,14 @@ You can also use a precompiled binary for your OS, there currently is one for OS
 1. When using this program there is not need to maintain a separate bib file. The bib file is very personal, sometimes it is managed by "knowledge" systems, it is hard to share, merge, etc.
 2. Updating all bib entries is as easy as running a single command
 
+# WHY GO?
+1. It is statically typed, which I like
+2. It compiles fast, I like this too
+3. Cross compile to Linux, OSX and Windows... I like!
+4. Compiles to self contained binaries, no need to install a thing in this mode
+5. Can run program as a script
+6. Efficient (fast, etc.)
+
 # LICENSE
 do whatever you want with this, use on your own risk
 
