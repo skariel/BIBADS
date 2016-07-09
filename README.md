@@ -48,5 +48,5 @@ do whatever you want with this, use on your own risk
 Ariel Keselman
 
 # VERSION
-1.0.0 2016
+1.1.0 2016
 

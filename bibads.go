@@ -48,7 +48,7 @@
 // Ariel Keselman
 
 // # VERSION
-// 1.0.0 2016
+// 1.1.0 2016
 
 package main
 
@@ -59,6 +59,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 )
 
 func getBibCodeAliasesFromSource(fileName string) (bibCodeAliases map[string]string, err error) {
@@ -177,25 +178,31 @@ func main() {
 	println("bib file name: ", bibFileName)
 
 	bibFileText := ""
-	for code := range codes {
+	var wg sync.WaitGroup
+	addBibText := func(code string) {
+		defer wg.Done()
 		realCode, isAlias := bibCodeAliases[code]
 		var alias string
 		if isAlias {
 			alias = code
 			code = realCode
 		}
-		print(padRight(code, " ", 19), "   ", padRight(alias, " ", 15), "   ...   ")
 		bibRefText, err := getBibRef(code)
 		if err != nil {
-			println(err.Error())
-			continue
+			println(padRight(code, " ", 19), "   ", padRight(alias, " ", 15), "   ...   ", err.Error())
+			return
 		}
-		println("OK")
+		println(padRight(code, " ", 19), "   ", padRight(alias, " ", 15), "   ...   OK")
 		if isAlias {
 			bibRefText = strings.Replace(bibRefText, realCode, alias, 1)
 		}
 		bibFileText = bibFileText + "\n\n" + bibRefText
 	}
+	for code := range codes {
+		wg.Add(1)
+		go addBibText(code)
+	}
+	wg.Wait()
 
 	ioutil.WriteFile(bibFileName, []byte(bibFileText), 0644)
 }
