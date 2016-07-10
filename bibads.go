@@ -134,6 +134,7 @@ func getAliasedCachedBibText(code string, bibCodeAliases map[string]string, cach
 		bibRefText, err = getBibRef(code)
 		if err != nil {
 			println(msg, err.Error())
+			out <- ""
 			return
 		}
 		println(msg, "OK")
