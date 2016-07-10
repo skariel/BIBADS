@@ -72,15 +72,9 @@ func getBibFileNameAndBibCodesFromSource(fileName string) (bibFileName string, b
 	}
 	bibFileName = strings.Split(sep[1], "}")[0]
 	bibCodes = make(map[string]bool)
-	sep = strings.Split(fileStr, "\\cite{")
+	sep = strings.Split(fileStr, "\\cite")
 	for _, cl := range sep[1:] {
-		cl = strings.Split(cl, "}")[0]
-		for _, c := range strings.Split(cl, ",") {
-			bibCodes[strings.TrimSpace(c)] = true
-		}
-	}
-	sep = strings.Split(fileStr, "\\citep{")
-	for _, cl := range sep[1:] {
+		cl = strings.Split(cl, "{")[1]
 		cl = strings.Split(cl, "}")[0]
 		for _, c := range strings.Split(cl, ",") {
 			bibCodes[strings.TrimSpace(c)] = true
